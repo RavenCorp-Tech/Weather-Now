@@ -1,12 +1,116 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Weather Now</title>
-  </head>
-  <body>
-    <div id="root"></div>
-    <script type="module" src="./src/main.jsx"></script>
-  </body>
-  </html>
+    <link rel="stylesheet" href="src/styles.css">
+</head>
+<body>
+    <div class="app">
+        <header>
+            <h1>Weather Now</h1>
+            <p>Quick current weather for any city (Open-Meteo)</p>
+        </header>
+
+        <main>
+            <div class="search">
+                <input type="text" id="cityInput" placeholder="Enter city name e.g. London">
+                <button id="searchButton">Search</button>
+            </div>
+
+            <div id="error" class="error" style="display: none;"></div>
+            <div id="weatherCard" class="card" style="display: none;"></div>
+        </main>
+
+        <footer>
+            <small>Data from Open-Meteo — no API key required.</small>
+        </footer>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const cityInput = document.getElementById('cityInput');
+            const searchButton = document.getElementById('searchButton');
+            const errorDiv = document.getElementById('error');
+            const weatherCard = document.getElementById('weatherCard');
+
+            async function fetchWeather(city) {
+                try {
+                    searchButton.disabled = true;
+                    searchButton.textContent = 'Searching...';
+                    errorDiv.style.display = 'none';
+                    weatherCard.style.display = 'none';
+
+                    // Geocoding
+                    const geoRes = await fetch(
+                        `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(city)}&count=1`
+                    );
+                    const geo = await geoRes.json();
+                    if (!geo.results || geo.results.length === 0) {
+                        throw new Error('City not found');
+                    }
+                    const { latitude, longitude, name, country } = geo.results[0];
+
+                    // Weather
+                    const weatherRes = await fetch(
+                        `https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}&current_weather=true&timezone=auto`
+                    );
+                    const data = await weatherRes.json();
+                    if (!data.current_weather) throw new Error('No weather data');
+
+                    // Update UI
+                    weatherCard.innerHTML = `
+                        <h2>${name}, ${country}</h2>
+                        <div class="row">
+                            <div class="big">${data.current_weather.temperature}°C</div>
+                            <div class="meta">
+                                <div>${getWeatherDescription(data.current_weather.weathercode)}</div>
+                                <div>Wind ${data.current_weather.windspeed} km/h</div>
+                                <div>Time: ${new Date(data.current_weather.time).toLocaleString()}</div>
+                            </div>
+                        </div>
+                    `;
+                    weatherCard.style.display = 'block';
+                } catch (err) {
+                    errorDiv.textContent = err.message || 'Failed to fetch weather';
+                    errorDiv.style.display = 'block';
+                } finally {
+                    searchButton.disabled = false;
+                    searchButton.textContent = 'Search';
+                }
+            }
+
+            function getWeatherDescription(code) {
+                const descriptions = {
+                    0: 'Clear sky',
+                    1: 'Mainly clear',
+                    2: 'Partly cloudy',
+                    3: 'Overcast',
+                    45: 'Fog',
+                    48: 'Depositing rime fog',
+                    51: 'Light drizzle',
+                    61: 'Slight rain',
+                    63: 'Moderate rain',
+                    71: 'Slight snow',
+                    80: 'Rain showers'
+                };
+                return descriptions[code] || `Code ${code}`;
+            }
+
+            // Event listeners
+            searchButton.addEventListener('click', () => {
+                const city = cityInput.value.trim();
+                if (city) fetchWeather(city);
+            });
+
+            cityInput.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') {
+                    const city = cityInput.value.trim();
+                    if (city) fetchWeather(city);
+                }
+            });
+        });
+    </script>
+</body>
+</html>
